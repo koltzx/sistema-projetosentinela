@@ -1,3 +1,4 @@
+```js
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -5,14 +6,21 @@ const cors = require("cors");
 
 const app = express();
 
-app.use(express.json());
+// ======================================================
+// CONFIGURAÇÕES
+// ======================================================
+
 app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // ======================================================
 // FRONTEND
 // ======================================================
 
-app.use(express.static(path.join(__dirname, "../frontend")));
+const FRONTEND_DIR = path.join(__dirname, "../frontend");
+
+app.use(express.static(FRONTEND_DIR));
 
 // ======================================================
 // BANCO DE DADOS
@@ -34,29 +42,13 @@ function criarDBInicial() {
 function readDB() {
   try {
     if (!fs.existsSync(DB_FILE)) {
-      const dbInicial = criarDBInicial();
-
-      fs.writeFileSync(
-        DB_FILE,
-        JSON.stringify(dbInicial, null, 2),
-        "utf8"
-      );
-
-      return dbInicial;
+      return criarDBInicial();
     }
 
     const conteudo = fs.readFileSync(DB_FILE, "utf8").trim();
 
     if (!conteudo) {
-      const dbInicial = criarDBInicial();
-
-      fs.writeFileSync(
-        DB_FILE,
-        JSON.stringify(dbInicial, null, 2),
-        "utf8"
-      );
-
-      return dbInicial;
+      return criarDBInicial();
     }
 
     const db = JSON.parse(conteudo);
@@ -106,9 +98,17 @@ function writeDB(data) {
 }
 
 // ======================================================
-// STATUS
+// STATUS DA API
 // ======================================================
 
+app.get("/api/status", (req, res) => {
+  res.json({
+    status: "online",
+    mensagem: "API do Projeto Sentinela funcionando"
+  });
+});
+
+// Mantém a rota antiga funcionando
 app.get("/", (req, res) => {
   res.json({
     status: "online",
@@ -124,10 +124,13 @@ app.post("/login", (req, res) => {
   try {
     const db = readDB();
 
+    const usuario = String(req.body.usuario || "").trim();
+    const senha = String(req.body.senha || "").trim();
+
     const user = db.usuarios.find(
       (u) =>
-        u.usuario === req.body.usuario &&
-        u.senha === req.body.senha
+        u.usuario === usuario &&
+        u.senha === senha
     );
 
     if (!user) {
@@ -219,10 +222,10 @@ app.post("/triagem", (req, res) => {
       id: Date.now(),
       nome: req.body.nome,
       sintoma: req.body.sintoma,
-      temperatura: temperatura,
+      temperatura,
       alergia: req.body.alergia,
       observacao: req.body.observacao,
-      risco: risco,
+      risco,
       status: "aguardando_medico",
       createdAt: new Date().toISOString()
     };
@@ -260,7 +263,7 @@ app.get("/triagens", (req, res) => {
 });
 
 // ======================================================
-// TV - CHAMADA DE PACIENTE
+// TV - CHAMAR PACIENTE
 // ======================================================
 
 app.post("/tv/chamar", (req, res) => {
@@ -388,11 +391,24 @@ app.get("/medicacoes", (req, res) => {
 });
 
 // ======================================================
-// INICIAR SERVIDOR
+// TRATAMENTO DE ERROS
 // ======================================================
 
-const PORT = process.env.PORT || 3000;
+app.use((erro, req, res, next) => {
+  console.error("Erro não tratado:", erro);
 
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  res.status(500).json({
+    erro: "Erro interno do servidor"
+  });
 });
+
+// ======================================================
+// VERCEL
+// ======================================================
+
+// IMPORTANTE:
+// Não usar app.listen() na Vercel.
+// A Vercel executa o Express como uma função.
+
+module.exports = app;
+```
